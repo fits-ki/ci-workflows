@@ -1,0 +1,92 @@
+name: Merge gate
+
+on:
+  workflow_call:
+    inputs:
+      results-json:
+        description: "toJSON(needs) from the always-running caller job"
+        required: true
+        type: string
+      required-jobs-json:
+        description: "Nonempty JSON array of jobs that must succeed"
+        required: true
+        type: string
+      conditional-jobs-json:
+        description: 'JSON object of job IDs to literal "true" or "false" selections'
+        default: "{}"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Required checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate every expected job
+        env:
+          RESULTS_JSON: ${{ inputs.results-json }}
+          REQUIRED_JOBS_JSON: ${{ inputs.required-jobs-json }}
+          CONDITIONAL_JOBS_JSON: ${{ inputs.conditional-jobs-json }}
+        run: |
+          python3 - <<'PY'
+          # BEGIN MERGE GATE
+          import json
+          import os
+          import re
+          import sys
+
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError("Duplicate JSON key")
+                  result[key] = value
+              return result
+
+          def load(name):
+              return json.loads(os.environ[name], object_pairs_hook=unique_object)
+
+          def valid_id(value):
+              return isinstance(value, str) and re.fullmatch(
+                  r"[A-Za-z_][A-Za-z0-9_-]*", value
+              )
+
+          try:
+              results = load("RESULTS_JSON")
+              required = load("REQUIRED_JOBS_JSON")
+              conditional = load("CONDITIONAL_JOBS_JSON")
+              if not isinstance(results, dict) or not results:
+                  raise ValueError("Job results must be a nonempty object")
+              if (
+                  not isinstance(required, list)
+                  or not required
+                  or not all(valid_id(job) for job in required)
+                  or len(set(required)) != len(required)
+              ):
+                  raise ValueError("Required jobs must be a nonempty unique ID array")
+              if not isinstance(conditional, dict):
+                  raise ValueError("Conditional jobs must be an object")
+              if not all(valid_id(job) for job in conditional):
+                  raise ValueError("Invalid conditional job ID")
+              if set(required) & set(conditional):
+                  raise ValueError("Required and conditional jobs must be disjoint")
+              expected = dict.fromkeys(required, "success")
+              for job, selected in conditional.items():
+                  if not isinstance(selected, str) or selected not in ("true", "false"):
+                      raise ValueError("Every conditional selection must be true or false")
+                  expected[job] = "success" if selected == "true" else "skipped"
+              if set(results) != set(expected):
+                  raise ValueError("Missing or undeclared job results")
+              for job, status in expected.items():
+                  result = results[job]
+                  if not isinstance(result, dict) or result.get("result") != status:
+                      raise ValueError("Unexpected result for job: " + job)
+          except (KeyError, TypeError, ValueError) as error:
+              print("::error::Merge gate rejected results: " + str(error))
+              sys.exit(1)
+          print("Merge gate: every declared job has its expected result")
+          # END MERGE GATE
+          PY

@@ -1,0 +1,53 @@
+name: Node npm checks
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        default: "24"
+        type: string
+      php-version:
+        description: "Optional PHP version required by the verification script"
+        default: ""
+        type: string
+      check-script:
+        description: "Name of the package.json verification script"
+        default: "verify"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the caller's tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+      - name: Set up optional PHP
+        if: inputs.php-version != ''
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          coverage: none
+      - name: Install the committed dependency graph
+        run: npm ci --no-audit --no-fund
+      - name: Verify
+        env:
+          CHECK_SCRIPT: ${{ inputs.check-script }}
+        run: |
+          case "$CHECK_SCRIPT" in
+            ""|-*|*[!a-zA-Z0-9:_-]*)
+              echo "::error::Invalid package script name"
+              exit 1
+              ;;
+          esac
+          npm run "$CHECK_SCRIPT"
