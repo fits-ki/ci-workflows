@@ -1,0 +1,175 @@
+name: Quick check
+
+# Reusable fast check. Empty command inputs are skipped.
+# `runner` is JSON (a string or an array) and is decoded with fromJSON.
+# A non-empty version input installs that toolchain in addition to `stack`.
+
+on:
+  workflow_call:
+    inputs:
+      stack:
+        description: "Toolchain: node, java-gradle, flutter, or php"
+        required: true
+        type: string
+      node-version:
+        description: "Node.js version. Required for stack node. Also installs Node when set."
+        required: false
+        type: string
+        default: ""
+      java-version:
+        description: "Java version. Required for stack java-gradle. Also installs Java when set."
+        required: false
+        type: string
+        default: ""
+      flutter-version:
+        description: "Flutter version. Required for stack flutter. Also installs Flutter when set."
+        required: false
+        type: string
+        default: ""
+      php-version:
+        description: "PHP version. Required for stack php. Also installs PHP when set."
+        required: false
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory for install, lint, typecheck, and test"
+        required: false
+        type: string
+        default: "."
+      install-cmd:
+        description: "Install command. Skipped when empty."
+        required: false
+        type: string
+        default: ""
+      lint-cmd:
+        description: "Lint command. Skipped when empty."
+        required: false
+        type: string
+        default: ""
+      typecheck-cmd:
+        description: "Typecheck command. Skipped when empty."
+        required: false
+        type: string
+        default: ""
+      test-cmd:
+        description: "Test command. Skipped when empty."
+        required: false
+        type: string
+        default: ""
+      runner:
+        description: "JSON runs-on value (string or array), decoded with fromJSON"
+        required: false
+        type: string
+        default: '"ubuntu-latest"'
+      timeout:
+        description: "Job timeout in minutes"
+        required: false
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - name: Check out the caller's tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Require the selected toolchain version
+        env:
+          STACK: ${{ inputs.stack }}
+          NODE_VERSION: ${{ inputs.node-version }}
+          JAVA_VERSION: ${{ inputs.java-version }}
+          FLUTTER_VERSION: ${{ inputs.flutter-version }}
+          PHP_VERSION: ${{ inputs.php-version }}
+        run: |
+          require() {
+            if [ -z "$2" ]; then
+              echo "::error::$1 is required for stack $STACK"
+              exit 1
+            fi
+          }
+          case "$STACK" in
+            node) require node-version "$NODE_VERSION" ;;
+            java-gradle) require java-version "$JAVA_VERSION" ;;
+            flutter) require flutter-version "$FLUTTER_VERSION" ;;
+            php) require php-version "$PHP_VERSION" ;;
+            *)
+              echo "::error::stack must be node, java-gradle, flutter, or php"
+              exit 1
+              ;;
+          esac
+
+      - name: Set up Node
+        if: ${{ inputs.stack == 'node' || inputs.node-version != '' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ format('{0}/package-lock.json', inputs.working-directory) }}
+
+      - name: Set up Java
+        if: ${{ inputs.stack == 'java-gradle' || inputs.java-version != '' }}
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+          cache: gradle
+
+      - name: Set up Flutter
+        if: ${{ inputs.stack == 'flutter' || inputs.flutter-version != '' }}
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+          pub-cache: "true"
+
+      - name: Set up PHP
+        if: ${{ inputs.stack == 'php' || inputs.php-version != '' }}
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          coverage: none
+          extensions: sqlite3, pdo_sqlite
+
+      - name: Cache Composer vendor
+        if: ${{ inputs.stack == 'php' || inputs.php-version != '' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ format('{0}/vendor', inputs.working-directory) }}
+          key: composer-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory)) }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install
+        if: ${{ inputs.install-cmd != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          INSTALL_CMD: ${{ inputs.install-cmd }}
+        run: bash -eo pipefail -c "$INSTALL_CMD"
+
+      - name: Lint
+        if: ${{ inputs.lint-cmd != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          LINT_CMD: ${{ inputs.lint-cmd }}
+        run: bash -eo pipefail -c "$LINT_CMD"
+
+      - name: Typecheck
+        if: ${{ inputs.typecheck-cmd != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TYPECHECK_CMD: ${{ inputs.typecheck-cmd }}
+        run: bash -eo pipefail -c "$TYPECHECK_CMD"
+
+      - name: Test
+        if: ${{ inputs.test-cmd != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TEST_CMD: ${{ inputs.test-cmd }}
+        run: bash -eo pipefail -c "$TEST_CMD"

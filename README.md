@@ -11,8 +11,7 @@ enable automerge or change any application's deployment policy.
 
 ## Reusable workflows
 
-The two building blocks are `workflow_call` reusables. Callers must pin the exact
-40-character commit SHA of a reviewed commit:
+Callers must pin the exact 40-character commit SHA of a reviewed commit:
 
 ```yaml
 uses: fits-ki/ci-workflows/.github/workflows/<name>.yml@<full-40-char-sha>
@@ -72,6 +71,88 @@ jobs:
       required-jobs-json: '["checks"]'
 ```
 
+### Quick check, full check, and desktop release
+
+`quick-check.yml` runs checkout, toolchain setup with dependency cache,
+then install, lint, typecheck, and test. An empty command is skipped.
+`runner` is a JSON string or a JSON array and is passed through `fromJSON`;
+the default is `"ubuntu-latest"`. Set the version input that matches
+`stack`. A second version input installs that extra toolchain as well
+(for example `stack: php` together with `node-version`). Node setup expects
+an npm `package-lock.json`. PHP setup enables `sqlite3` and `pdo_sqlite`
+and caches `vendor/` from `composer.lock`.
+
+`full-check.yml` is the same sequence plus `build-cmd` and optional
+`e2e-cmd`. It always runs on `ubuntu-latest`. The default timeout is 30
+minutes (quick check: 15).
+
+`release-desktop.yml` builds the JSON `build-matrix` and uploads `dist/`.
+Call it only from a workflow triggered by a `v*` tag. The build command is
+bash and must write the release files into `dist/` at the repository root.
+The uploaded artifact name is `<artifact-name>-<runner>`. When the build
+needs signing material, the caller passes inherited secrets:
+
+```yaml
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".wiki/**"
+      - "openspec/**"
+      - ".agents/**"
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    if: github.event.pull_request.draft == false
+    uses: fits-ki/ci-workflows/.github/workflows/quick-check.yml@<SHA>
+    with:
+      stack: node
+      node-version: "22"
+      install-cmd: npm ci --no-audit --no-fund
+      lint-cmd: npm run lint
+      typecheck-cmd: npm run typecheck
+      test-cmd: npm test
+      timeout: 15
+```
+
+```yaml
+jobs:
+  full:
+    uses: fits-ki/ci-workflows/.github/workflows/full-check.yml@<SHA>
+    with:
+      stack: node
+      node-version: "22"
+      install-cmd: npm ci --no-audit --no-fund
+      lint-cmd: npm run lint
+      typecheck-cmd: npm run typecheck
+      test-cmd: npm test
+      build-cmd: npm run build
+      e2e-cmd: npm run e2e
+      timeout: 30
+```
+
+```yaml
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  desktop:
+    uses: fits-ki/ci-workflows/.github/workflows/release-desktop.yml@<SHA>
+    secrets: inherit
+    with:
+      build-matrix: '["ubuntu-24.04","windows-2022","macos-15"]'
+      build-cmd: npm run build
+      artifact-name: desktop
+      timeout: 75
+```
+
 ## Guarantees and limits
 
 These workflows provide a single check that branch protection *can* be
@@ -84,3 +165,5 @@ repository, separately approved step.
 `checks.yml` runs `python3 -m unittest discover -s tests -v` on PRs to
 `develop`/`main`. The tests execute the exact inline gate logic and the
 literal script-validation block - no GitHub or network needed.
+`actionlint.yml` lints the workflow files on non-draft pull requests and
+stops after 5 minutes.
