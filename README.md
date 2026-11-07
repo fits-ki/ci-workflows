@@ -101,7 +101,6 @@ on:
       - "**/*.md"
       - "docs/**"
       - ".wiki/**"
-      - "openspec/**"
       - ".agents/**"
 permissions:
   contents: read
