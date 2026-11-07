@@ -1,0 +1,108 @@
+name: Workflow integrity
+
+# Reusable check of the caller repository. It does not read a receipt,
+# a pointer hash, or a script from the caller.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-integrity:
+    name: Workflow integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the caller's tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check AGENTS shared block and OpenSpec layout
+        env:
+          INTEGRITY_ROOT: ${{ github.workspace }}
+        run: |
+          python3 - <<'PY'
+          # BEGIN WORKFLOW INTEGRITY
+          import os
+          import sys
+
+          START = "<!-- agent-infra:shared:start -->"
+          END = "<!-- agent-infra:shared:end -->"
+          SHARED_ERROR = (
+              "AGENTS.md: Shared-Block muss genau einmal "
+              "vollstaendig vorhanden sein"
+          )
+
+          def inside(root, path):
+              root_real = os.path.realpath(root)
+              try:
+                  candidate = os.path.realpath(path)
+                  common = os.path.commonpath([root_real, candidate])
+              except (OSError, ValueError):
+                  return False
+              return common == root_real
+
+          def check(root):
+              errors = []
+              root = os.path.abspath(root)
+              agents = os.path.join(root, "AGENTS.md")
+              if (
+                  os.path.islink(agents)
+                  or not inside(root, agents)
+                  or not os.path.isfile(agents)
+              ):
+                  errors.append("AGENTS.md fehlt oder ist kein regulaeres File")
+              else:
+                  try:
+                      with open(agents, encoding="utf-8") as handle:
+                          text = handle.read()
+                  except (OSError, UnicodeDecodeError):
+                      errors.append("AGENTS.md nicht lesbar")
+                      text = None
+                  if text is not None:
+                      start = text.find(START)
+                      end = text.find(END)
+                      if (
+                          text.count(START) != 1
+                          or text.count(END) != 1
+                          or end < start
+                          or not text[start + len(START):end].strip()
+                      ):
+                          errors.append(SHARED_ERROR)
+              config = os.path.join(root, "openspec", "config.yaml")
+              specs = os.path.join(root, "openspec", "specs")
+              archive = os.path.join(root, "openspec", "changes", "archive")
+              if (
+                  os.path.islink(config)
+                  or not inside(root, config)
+                  or not os.path.isfile(config)
+                  or os.path.getsize(config) == 0
+              ):
+                  errors.append("openspec/config.yaml fehlt oder ist leer")
+              if (
+                  os.path.islink(specs)
+                  or not inside(root, specs)
+                  or not os.path.isdir(specs)
+              ):
+                  errors.append("openspec/specs/ fehlt")
+              if (
+                  os.path.islink(archive)
+                  or not inside(root, archive)
+                  or not os.path.isdir(archive)
+              ):
+                  errors.append("openspec/changes/archive/ fehlt")
+              return errors
+
+          def main():
+              errors = check(os.environ.get("INTEGRITY_ROOT", "."))
+              if errors:
+                  sys.stdout.write("\n".join(errors) + "\n")
+                  sys.exit(1)
+              sys.stdout.write("workflow-integrity ok\n")
+
+          main()
+          # END WORKFLOW INTEGRITY
+          PY
