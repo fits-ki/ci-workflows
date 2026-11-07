@@ -10,7 +10,12 @@ import unittest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOWS = os.path.join(REPO, ".github", "workflows")
 SHA_PIN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$")
-TEMPLATES = ("quick-check.yml", "full-check.yml", "release-desktop.yml")
+TEMPLATES = (
+    "quick-check.yml",
+    "full-check.yml",
+    "release-desktop.yml",
+    "workflow-integrity.yml",
+)
 
 
 def read(name):
@@ -82,6 +87,9 @@ class TestSharedTemplates(unittest.TestCase):
             readme)
         self.assertIn(
             "uses: fits-ki/ci-workflows/.github/workflows/release-desktop.yml@<SHA>",
+            readme)
+        self.assertIn(
+            "uses: fits-ki/ci-workflows/.github/workflows/workflow-integrity.yml@<SHA>",
             readme)
         self.assertNotIn("srv-development", readme)
         self.assertIn("secrets: inherit", readme)

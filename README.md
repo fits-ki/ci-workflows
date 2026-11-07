@@ -153,6 +153,30 @@ jobs:
       timeout: 75
 ```
 
+### `.github/workflows/workflow-integrity.yml` - Workflow integrity
+
+Checks the caller repository after checkout. It does not read a receipt,
+a pointer hash, or a script shipped by the caller. Missing legacy files
+are not a failure.
+
+Pass requires:
+
+- `AGENTS.md` is a regular file and contains
+  `<!-- agent-infra:shared:start -->` and
+  `<!-- agent-infra:shared:end -->` exactly once, in that order, with
+  non-empty text between the markers
+- `openspec/config.yaml` is a non-empty regular file
+- `openspec/specs/` and `openspec/changes/archive/` are real directories
+
+Symlinks for those paths fail. No secrets, `contents: read` only,
+`ubuntu-latest`, 5-minute timeout.
+
+```yaml
+jobs:
+  workflow-integrity:
+    uses: fits-ki/ci-workflows/.github/workflows/workflow-integrity.yml@<SHA>
+```
+
 ## Guarantees and limits
 
 These workflows provide a single check that branch protection *can* be
