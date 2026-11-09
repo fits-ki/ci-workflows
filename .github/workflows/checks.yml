@@ -1,23 +1,81 @@
 name: Workflow checks
 
+# Kepler-Action-6-Gate fuer PRs gegen develop (CIW-7).
+# Check-Kontexte muessen exakt `test` und `openspec-validate` heissen (Job-Namen).
+# Bewusst keine Reusable Workflows fuer die Gate-Jobs: deren Checknamen
+# erscheinen als "Job / Job" und erfuellen den Action-Vertrag nicht.
+#
+# Pfadfilter (paths, letztes passendes Muster gewinnt):
+# - "**" inkludiert alle Pfade.
+# - "!**/*.md", "!docs/**", "!.wiki/**", "!.agents/**" schliessen Doku aus.
+# - "openspec/**" holt Spec- und Archivpfade zurueck, einschliesslich Markdown.
+# Reine Doku-/Wiki-/Agent-PRs starten diesen Workflow nicht und bleiben in
+# Action 6 gesperrt, bis eine explizite Doku-Policy geklaert ist.
+# Draft-PRs: Job-if -> skipped (nie success). Kein push-Trigger, keine Deploys,
+# keine Secrets, kein kostenpflichtiges GitHub-Feature.
+
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!.wiki/**"
+      - "!.agents/**"
+      - "openspec/**"
 
 permissions:
   contents: read
 
 concurrency:
-  group: workflow-checks-${{ github.event.pull_request.number }}
+  group: workflow-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
+    name: test
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check out the pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Exercise the actual gate and workflow contracts
         run: python3 -m unittest discover -s tests -v
+
+  openspec-validate:
+    name: openspec-validate
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install OpenSpec CLI
+        run: npm install --global --ignore-scripts "@fission-ai/openspec@1.16.0"
+
+      - name: Prove invalid OpenSpec fails closed
+        run: python3 tests/openspec_validate_behavior.py
+
+      - name: Validate OpenSpec when present
+        run: |
+          set -euo pipefail
+          openspec --version
+          if [ -d openspec ]; then
+            openspec validate --all --strict --no-interactive
+            openspec validate --all --strict --archived --no-interactive
+          else
+            echo "Kein openspec/-Baum in diesem Repo - Fail-Closed ist ueber den Behavior-Test abgesichert."
+          fi
