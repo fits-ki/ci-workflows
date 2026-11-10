@@ -15,6 +15,11 @@ on:
         description: 'JSON object of job IDs to literal "true" or "false" selections'
         default: "{}"
         type: string
+      runner:
+        description: "JSON runs-on value (string or array), decoded with fromJSON"
+        required: false
+        type: string
+        default: '"ubuntu-latest"'
 
 permissions:
   contents: read
@@ -22,7 +27,7 @@ permissions:
 jobs:
   gate:
     name: Required checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 2
     steps:
       - name: Validate every expected job

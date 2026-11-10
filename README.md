@@ -19,7 +19,8 @@ uses: fits-ki/ci-workflows/.github/workflows/<name>.yml@<full-40-char-sha>
 
 ### `.github/workflows/node-npm.yml` - Node/npm checks
 
-Runs a package.json verification script on Ubuntu with a 15-minute timeout.
+Runs a package.json verification script on `runner` (default
+`ubuntu-latest`) with a 15-minute timeout.
 
 Inputs (all strings, all optional):
 
@@ -71,6 +72,16 @@ jobs:
       required-jobs-json: '["checks"]'
 ```
 
+### Runner selection
+
+`quick-check.yml`, `full-check.yml`, `merge-gate.yml`, `node-npm.yml` and
+`workflow-integrity.yml` take an optional `runner` input: a JSON string or
+JSON array passed through `fromJSON`, default `"ubuntu-latest"`. Private
+callers can select a self-hosted runner, for example with
+`runner: '["self-hosted", "linux"]'`. Public repositories stay on
+GitHub-hosted runners, and fork pull requests must never reach a
+self-hosted runner.
+
 ### Quick check, full check, and desktop release
 
 `quick-check.yml` runs checkout, toolchain setup with dependency cache,
@@ -83,7 +94,7 @@ an npm `package-lock.json`. PHP setup enables `sqlite3` and `pdo_sqlite`
 and caches `vendor/` from `composer.lock`.
 
 `full-check.yml` is the same sequence plus `build-cmd` and optional
-`e2e-cmd`. It always runs on `ubuntu-latest`. The default timeout is 30
+`e2e-cmd`. It takes the same `runner` input (default `"ubuntu-latest"`). The default timeout is 30
 minutes (quick check: 15).
 
 `release-desktop.yml` builds the JSON `build-matrix` and uploads `dist/`.
@@ -168,7 +179,7 @@ Pass requires:
 - `openspec/specs/` and `openspec/changes/archive/` are real directories
 
 Symlinks for those paths fail. No secrets, `contents: read` only,
-`ubuntu-latest`, 5-minute timeout.
+`runner` input (default `ubuntu-latest`), 5-minute timeout.
 
 ```yaml
 jobs:
