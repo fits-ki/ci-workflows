@@ -104,3 +104,17 @@ class TestRunnerInput(unittest.TestCase):
                 self.assertIn("runs-on: ${{ fromJSON(inputs.runner) }}", text)
                 self.assertIn("default: '\"ubuntu-latest\"'", text)
                 self.assertNotIn("runs-on: ubuntu-latest", text)
+
+
+class TestBareMetalPhp(unittest.TestCase):
+    def test_setup_php_only_on_github_hosted_native_php_on_self_hosted(self):
+        for name in ("quick-check.yml", "full-check.yml", "node-npm.yml"):
+            with self.subTest(name=name):
+                text = read(name)
+                setup = re.search(r"- name: Set up (?:optional )?PHP\n\s+if: (.+)\n\s+uses: shivammathur/setup-php@", text)
+                self.assertIsNotNone(setup, name)
+                self.assertIn("runner.environment == 'github-hosted'", setup.group(1))
+                native = re.search(r"- name: Use native PHP \(self-hosted\)\n\s+if: (.+)\n", text)
+                self.assertIsNotNone(native, name)
+                self.assertIn("runner.environment == 'self-hosted'", native.group(1))
+                self.assertIn('php_bin="/usr/bin/php${PHP_VERSION}"', text)
