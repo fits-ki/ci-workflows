@@ -141,8 +141,26 @@ jobs:
           cache: true
           pub-cache: "true"
 
+      # The setup-php action always calls sudo and fails on a self-hosted
+      # runner without sudo (bare metal). There, use the host's PHP.
+      - name: Use native PHP (self-hosted)
+        if: ${{ (inputs.stack == 'php' || inputs.php-version != '') && runner.environment == 'self-hosted' }}
+        env:
+          PHP_VERSION: ${{ inputs.php-version }}
+        run: |
+          php_bin="/usr/bin/php${PHP_VERSION}"
+          if [ ! -x "$php_bin" ]; then
+            echo "::error::$php_bin fehlt auf diesem self-hosted Runner (setup-php braucht sudo)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$php_bin" "$RUNNER_TEMP/bin/php"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$php_bin" -v
+          command -v composer
+
       - name: Set up PHP
-        if: ${{ inputs.stack == 'php' || inputs.php-version != '' }}
+        if: ${{ (inputs.stack == 'php' || inputs.php-version != '') && runner.environment == 'github-hosted' }}
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ inputs.php-version }}
