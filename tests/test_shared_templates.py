@@ -52,10 +52,10 @@ class TestSharedTemplates(unittest.TestCase):
         self.assertIn("cache: gradle", text)
         self.assertIn("extensions: sqlite3, pdo_sqlite", text)
 
-    def test_full_check_is_ubuntu_and_has_build_and_e2e(self):
+    def test_full_check_defaults_to_ubuntu_and_has_build_and_e2e(self):
         text = read("full-check.yml")
-        self.assertIn("runs-on: ubuntu-latest", text)
-        self.assertNotIn("inputs.runner", text)
+        self.assertIn("fromJSON(inputs.runner)", text)
+        self.assertIn("default: '\"ubuntu-latest\"'", text)
         self.assertIn("default: 30", text)
         self.assertIn("inputs.build-cmd != ''", text)
         self.assertIn("inputs.e2e-cmd != ''", text)
@@ -93,3 +93,14 @@ class TestSharedTemplates(unittest.TestCase):
             readme)
         self.assertNotIn("srv-development", readme)
         self.assertIn("secrets: inherit", readme)
+
+
+class TestRunnerInput(unittest.TestCase):
+    def test_linux_templates_take_runner_input_defaulting_to_ubuntu(self):
+        for name in ("quick-check.yml", "full-check.yml", "merge-gate.yml",
+                     "node-npm.yml", "workflow-integrity.yml"):
+            with self.subTest(name=name):
+                text = read(name)
+                self.assertIn("runs-on: ${{ fromJSON(inputs.runner) }}", text)
+                self.assertIn("default: '\"ubuntu-latest\"'", text)
+                self.assertNotIn("runs-on: ubuntu-latest", text)
