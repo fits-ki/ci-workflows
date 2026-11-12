@@ -9,6 +9,7 @@ import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOWS = os.path.join(REPO, ".github", "workflows")
+GENERIC_DEFAULT = "default: '[\"self-hosted\", \"linux\", \"generic\"]'"
 SHA_PIN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$")
 TEMPLATES = (
     "quick-check.yml",
@@ -44,7 +45,7 @@ class TestSharedTemplates(unittest.TestCase):
     def test_quick_check_runner_and_skipped_commands(self):
         text = read("quick-check.yml")
         self.assertIn("fromJSON(inputs.runner)", text)
-        self.assertIn("default: '\"ubuntu-latest\"'", text)
+        self.assertIn(GENERIC_DEFAULT, text)
         self.assertIn("default: 15", text)
         for cmd in ("install-cmd", "lint-cmd", "typecheck-cmd", "test-cmd"):
             self.assertIn("inputs." + cmd + " != ''", text)
@@ -52,10 +53,10 @@ class TestSharedTemplates(unittest.TestCase):
         self.assertIn("cache: gradle", text)
         self.assertIn("extensions: sqlite3, pdo_sqlite", text)
 
-    def test_full_check_defaults_to_ubuntu_and_has_build_and_e2e(self):
+    def test_full_check_defaults_to_generic_and_has_build_and_e2e(self):
         text = read("full-check.yml")
         self.assertIn("fromJSON(inputs.runner)", text)
-        self.assertIn("default: '\"ubuntu-latest\"'", text)
+        self.assertIn(GENERIC_DEFAULT, text)
         self.assertIn("default: 30", text)
         self.assertIn("inputs.build-cmd != ''", text)
         self.assertIn("inputs.e2e-cmd != ''", text)
@@ -96,13 +97,13 @@ class TestSharedTemplates(unittest.TestCase):
 
 
 class TestRunnerInput(unittest.TestCase):
-    def test_linux_templates_take_runner_input_defaulting_to_ubuntu(self):
+    def test_linux_templates_take_runner_input_defaulting_to_generic(self):
         for name in ("quick-check.yml", "full-check.yml", "merge-gate.yml",
                      "node-npm.yml", "workflow-integrity.yml"):
             with self.subTest(name=name):
                 text = read(name)
                 self.assertIn("runs-on: ${{ fromJSON(inputs.runner) }}", text)
-                self.assertIn("default: '\"ubuntu-latest\"'", text)
+                self.assertIn(GENERIC_DEFAULT, text)
                 self.assertNotIn("runs-on: ubuntu-latest", text)
 
 
@@ -117,4 +118,5 @@ class TestBareMetalPhp(unittest.TestCase):
                 native = re.search(r"- name: Use native PHP \(self-hosted\)\n\s+if: (.+)\n", text)
                 self.assertIsNotNone(native, name)
                 self.assertIn("runner.environment == 'self-hosted'", native.group(1))
-                self.assertIn('php_bin="/usr/bin/php${PHP_VERSION}"', text)
+                self.assertIn('"/opt/php/${PHP_VERSION}/bin/php" "/usr/bin/php${PHP_VERSION}"', text)
+                self.assertNotIn("default: '\"ubuntu-latest\"'", text)

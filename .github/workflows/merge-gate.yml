@@ -16,10 +16,10 @@ on:
         default: "{}"
         type: string
       runner:
-        description: "JSON runs-on value (string or array), decoded with fromJSON"
+        description: "JSON runs-on value (string or array), decoded with fromJSON. Fallback: '\"ubuntu-latest\"'"
         required: false
         type: string
-        default: '"ubuntu-latest"'
+        default: '["self-hosted", "linux", "generic"]'
 
 permissions:
   contents: read
