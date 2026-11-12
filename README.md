@@ -20,7 +20,7 @@ uses: fits-ki/ci-workflows/.github/workflows/<name>.yml@<full-40-char-sha>
 ### `.github/workflows/node-npm.yml` - Node/npm checks
 
 Runs a package.json verification script on `runner` (default
-`ubuntu-latest`) with a 15-minute timeout.
+`["self-hosted", "linux", "generic"]`) with a 15-minute timeout.
 
 Inputs (all strings, all optional):
 
@@ -76,25 +76,30 @@ jobs:
 
 `quick-check.yml`, `full-check.yml`, `merge-gate.yml`, `node-npm.yml` and
 `workflow-integrity.yml` take an optional `runner` input: a JSON string or
-JSON array passed through `fromJSON`, default `"ubuntu-latest"`. Private
-callers can select a self-hosted runner, for example with
-`runner: '["self-hosted", "linux"]'`. Public repositories stay on
-GitHub-hosted runners, and fork pull requests must never reach a
-self-hosted runner.
+JSON array passed through `fromJSON`, default
+`["self-hosted", "linux", "generic"]` (the organisation-wide ephemeral
+runners). Pass `runner: '"ubuntu-latest"'` to fall back to a GitHub-hosted
+runner. Public repositories may use the generic runners only with approval
+required for workflows from outside contributors; `pull_request_target`
+stays forbidden there. On self-hosted runners PHP comes from
+`/opt/php/<version>/bin/php` or `/usr/bin/php<version>` (setup-php needs
+sudo). Service containers must publish only the container port (for example
+`ports: ["5432"]`) and read the host port from
+`job.services.<name>.ports['5432']`, because several runners share one host.
 
 ### Quick check, full check, and desktop release
 
 `quick-check.yml` runs checkout, toolchain setup with dependency cache,
 then install, lint, typecheck, and test. An empty command is skipped.
 `runner` is a JSON string or a JSON array and is passed through `fromJSON`;
-the default is `"ubuntu-latest"`. Set the version input that matches
+the default is `["self-hosted", "linux", "generic"]`. Set the version input that matches
 `stack`. A second version input installs that extra toolchain as well
 (for example `stack: php` together with `node-version`). Node setup expects
 an npm `package-lock.json`. PHP setup enables `sqlite3` and `pdo_sqlite`
 and caches `vendor/` from `composer.lock`.
 
 `full-check.yml` is the same sequence plus `build-cmd` and optional
-`e2e-cmd`. It takes the same `runner` input (default `"ubuntu-latest"`). The default timeout is 30
+`e2e-cmd`. It takes the same `runner` input (default `["self-hosted", "linux", "generic"]`). The default timeout is 30
 minutes (quick check: 15).
 
 `release-desktop.yml` builds the JSON `build-matrix` and uploads `dist/`.
@@ -179,7 +184,7 @@ Pass requires:
 - `openspec/specs/` and `openspec/changes/archive/` are real directories
 
 Symlinks for those paths fail. No secrets, `contents: read` only,
-`runner` input (default `ubuntu-latest`), 5-minute timeout.
+`runner` input (default `["self-hosted", "linux", "generic"]`), 5-minute timeout.
 
 ```yaml
 jobs:

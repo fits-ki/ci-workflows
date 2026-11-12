@@ -15,10 +15,10 @@ on:
         default: "verify"
         type: string
       runner:
-        description: "JSON runs-on value (string or array), decoded with fromJSON"
+        description: "JSON runs-on value (string or array), decoded with fromJSON. Fallback: '\"ubuntu-latest\"'"
         required: false
         type: string
-        default: '"ubuntu-latest"'
+        default: '["self-hosted", "linux", "generic"]'
 
 permissions:
   contents: read
@@ -44,9 +44,17 @@ jobs:
         env:
           PHP_VERSION: ${{ inputs.php-version }}
         run: |
-          php_bin="/usr/bin/php${PHP_VERSION}"
-          if [ ! -x "$php_bin" ]; then
-            echo "::error::$php_bin fehlt auf diesem self-hosted Runner (setup-php braucht sudo)"
+          # /opt/php/<version>/bin/php: generic runners (vps-dev-runner,
+          # static 8.3/8.4, 8.5 linked); /usr/bin/php<version>: Ubuntu packages.
+          php_bin=""
+          for candidate in "/opt/php/${PHP_VERSION}/bin/php" "/usr/bin/php${PHP_VERSION}"; do
+            if [ -x "$candidate" ]; then
+              php_bin="$candidate"
+              break
+            fi
+          done
+          if [ -z "$php_bin" ]; then
+            echo "::error::PHP ${PHP_VERSION} fehlt auf diesem self-hosted Runner (/opt/php/${PHP_VERSION}/bin/php oder /usr/bin/php${PHP_VERSION}; setup-php braucht sudo)"
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/bin"
