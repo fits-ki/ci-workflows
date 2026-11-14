@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: ""
+      package-manager:
+        description: "Node package manager for the dependency cache: npm (package-lock.json) or pnpm (pnpm-lock.yaml, version from packageManager)"
+        required: false
+        type: string
+        default: "npm"
       java-version:
         description: "Java version. Required for stack java-gradle. Also installs Java when set."
         required: false
@@ -106,13 +111,34 @@ jobs:
               ;;
           esac
 
+      - name: Require a supported package manager
+        if: ${{ inputs.stack == 'node' || inputs.node-version != '' }}
+        env:
+          PACKAGE_MANAGER: ${{ inputs.package-manager }}
+        run: |
+          case "$PACKAGE_MANAGER" in
+            npm|pnpm) ;;
+            *)
+              echo "::error::package-manager must be npm or pnpm"
+              exit 1
+              ;;
+          esac
+
+      # pnpm must be on PATH before setup-node resolves the pnpm store cache.
+      # The version comes from the caller's packageManager field.
+      - name: Set up pnpm
+        if: ${{ (inputs.stack == 'node' || inputs.node-version != '') && inputs.package-manager == 'pnpm' }}
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ${{ format('{0}/package.json', inputs.working-directory) }}
+
       - name: Set up Node
         if: ${{ inputs.stack == 'node' || inputs.node-version != '' }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ inputs.node-version }}
-          cache: npm
-          cache-dependency-path: ${{ format('{0}/package-lock.json', inputs.working-directory) }}
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ format('{0}/{1}', inputs.working-directory, inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json') }}
 
       - name: Set up Java
         if: ${{ inputs.stack == 'java-gradle' || inputs.java-version != '' }}
