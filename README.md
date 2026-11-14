@@ -94,8 +94,10 @@ then install, lint, typecheck, and test. An empty command is skipped.
 `runner` is a JSON string or a JSON array and is passed through `fromJSON`;
 the default is `["self-hosted", "linux", "generic"]`. Set the version input that matches
 `stack`. A second version input installs that extra toolchain as well
-(for example `stack: php` together with `node-version`). Node setup expects
-an npm `package-lock.json`. PHP setup enables `sqlite3` and `pdo_sqlite`
+(for example `stack: php` together with `node-version`). Node setup caches
+dependencies for `package-manager` (`npm` by default with
+`package-lock.json`; `pnpm` installs pnpm via `pnpm/action-setup` from the
+caller's `packageManager` field and caches from `pnpm-lock.yaml`). PHP setup enables `sqlite3` and `pdo_sqlite`
 and caches `vendor/` from `composer.lock`.
 
 `full-check.yml` is the same sequence plus `build-cmd` and optional

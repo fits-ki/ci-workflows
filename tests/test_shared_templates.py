@@ -49,9 +49,23 @@ class TestSharedTemplates(unittest.TestCase):
         self.assertIn("default: 15", text)
         for cmd in ("install-cmd", "lint-cmd", "typecheck-cmd", "test-cmd"):
             self.assertIn("inputs." + cmd + " != ''", text)
-        self.assertIn("cache: npm", text)
+        self.assertIn("package-manager", text)
         self.assertIn("cache: gradle", text)
         self.assertIn("extensions: sqlite3, pdo_sqlite", text)
+
+    def test_node_package_manager_input_npm_default_and_pnpm(self):
+        for name in ("quick-check.yml", "full-check.yml"):
+            text = read(name)
+            self.assertIn("package-manager:", text, name)
+            self.assertIn('default: "npm"', text, name)
+            self.assertIn("cache: ${{ inputs.package-manager }}", text, name)
+            self.assertIn("'pnpm-lock.yaml' || 'package-lock.json'", text, name)
+            self.assertIn("npm|pnpm) ;;", text, name)
+            setup_pnpm = text.index("name: Set up pnpm")
+            setup_node = text.index("name: Set up Node")
+            self.assertLess(setup_pnpm, setup_node, name)
+            self.assertIn("inputs.package-manager == 'pnpm'", text, name)
+            self.assertIn("pnpm/action-setup@", text, name)
 
     def test_full_check_defaults_to_generic_and_has_build_and_e2e(self):
         text = read("full-check.yml")
